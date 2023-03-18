@@ -27,7 +27,7 @@ function Add-LoginProperties {
     $Item.FieldValues | Add-Member -MemberType NoteProperty -Name PersonLoginId -Value $LoginId -Force
 }
 
-# Добавление Microsoft SharePoint Snap-in в текущую сессию
+# Добавление MicrosoftSharePointPowershell Module в текущую сессию
 if (-not (Test-ModuleInstalled -ModuleName "Microsoft.SharePoint.PowerShell")) {
     Write-Output "Loading SharePoint PowerShell Snapin"
     Add-PsSnapin Microsoft.SharePoint.PowerShell -ErrorAction Stop
