@@ -5,7 +5,7 @@ If($null -eq (Get-PsSnapin | Where-Object {$_.Name -eq "Microsoft.SharePoint.Pow
 }
 
 #Объявлем переменные
-$url = "http://vitro2.kazmintech.kz/"
+$url = ""
 $orglistname = "Организационно-штатная структура"
 $fizlistname = "Физические лица"
 $divcontent = "0x0100CE4B4034AA87410EB92561C8318E2C16005639E40A0D3F6342A19FF44EB45B5A85"

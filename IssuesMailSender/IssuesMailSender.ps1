@@ -1,5 +1,5 @@
-﻿#main data
-$Main = "http://vserver"
+﻿#Объявляем переменные
+$Main = ""
 $Design = $Main + "/Design"
 $issuelistname = "Замечания"
 $orglistname = "Организационно-штатная структура"
