@@ -1,4 +1,4 @@
-﻿$url = "http://vitro2.kazmintech.kz"
+﻿$url = ""
 $orglistname = "Организационно-штатная структура"
 $empcontent = "0x010040D9D13AF3634AACB514CB30B54F2CAE004BC5116E5FCC734388387FAF0125CB7D"
 

@@ -1,14 +1,12 @@
-﻿#Start-Transcript
-
-#main data
-$Main = ""
+﻿#main data
+$Main = "http://vserver"
 $Design = $Main + "/Design"
 $issuelistname = "Замечания"
 $orglistname = "Организационно-штатная структура"
 $fizlistname = "Физические лица"
 $empcontent = "0x010040D9D13AF3634AACB514CB30B54F2CAE004BC5116E5FCC734388387FAF0125CB7D"
 
-#mail data
+#данные для почтового сервиса
 $dt = Get-Date -Format "dd/MM/yyyy"
 $smtpserver = ""
 $from = ""
@@ -16,10 +14,10 @@ $subject = "Сроки выполнения замечаний в Vitro-CAD [$dt
 
 $connectmain = Connect-PnPOnline $Main -CurrentCredentials
 
-#collect employees
+#собираем текущих пользователей ОШС
 $emps = Get-PnPListItem -List $orglistname | Where-Object {$_.FieldValues.ContentTypeId -like $empcontent -and $_.FieldValues.VitroOrgDisplayInStructure -eq $true}# -and $_.FieldValues.ID -in (160, 208, 209)}
 
-#add emails
+#Собираем почтовые адреса из списка физ. лиц
 foreach ($emp in $emps){
 
     $PersonEmail = (Get-PnPListItem -List $fizlistname | Where-Object {$_.FieldValues.ID -eq $emp.FieldValues.VitroOrgPerson.LookupId}).FieldValues.Email
@@ -50,7 +48,7 @@ function Generate-Table()
 
     foreach ($row in $issues){
 
-            #format data
+            #Форматируем данные
             $issueId = $row.FieldValues.ID
             $fileId = $row.FieldValues.VitroBaseLibraryItemUniqueId
 
@@ -59,7 +57,7 @@ function Generate-Table()
             $issuelink = "<a href='$Design/_layouts/15/Vitro/TableView/ListView.aspx?List=CommentList&listname=$issuelistname&ID=$issueId'>" + $row.FieldValues.ID + "</a>"
             $filelink = "<a href='$Main/_layouts/15/Vitro/ProtocolHandler/VitroProtocolHandler.aspx?target=vitro://vitro/Design{$fileId}'>" + $row.FieldValues.VitroBaseLibraryItemName + "</a>"
         
-            #fill the table
+            #Заполняем таблицу
             $HtmlTable += "<tr style='font-size:13px;background-color:#FFFFFF'>
             <td>" + $issuelink + "</td>
             <td>" + $row.FieldValues.VitroBaseCommentProject + "</td>
@@ -103,26 +101,25 @@ Function Send-Mail
 
 foreach ($emp in $emps)
 {
-    #mail body title
+    #Заголовки тела письма
     $open = "<br/>Мои замечания (Открытые):<br/>"
     $closed = "<br/>Замечания от меня (Выполненные):<br/>"
 
-    #collect open issues
+    #Собираем открытые поручения
     $openissues = Get-PnPListItem -List $issuelistname | Where-Object {$_.FieldValues.VitroBaseCommentStatus.LookupId -in (1, 2, 4) -and $_.FieldValues.VitroBaseCommentAssignTo.LookupId -eq $emp.FieldValues.ID} | Sort-Object -Property {$_.FieldValues.VitroBaseCommentProject}
 
-    #collect closed issues
+    #Собираем закрытые поручения
     $closedissues = Get-PnPListItem -List $issuelistname | Where-Object {$_.FieldValues.VitroBaseCommentStatus.LookupId -eq 3 -and $_.FieldValues.VitroBaseCommentAuthor.LookupId -eq $emp.FieldValues.ID} | Sort-Object -Property {$_.FieldValues.VitroBaseCommentProject}
 
-    #fill open data table
+    #Открытые поручения
     if($null -ne $openissues){$odata = Generate-Table $openissues}else{$odata='';$open = ''}
 
-    #fill closed data table
+    #Закрытые поручения
     if($null -ne $closedissues){$cdata = Generate-Table $closedissues}else{$cdata='';$closed = ''}
 
-    #Send email
+    #Отправка почты
     $to = $emp.FieldValues.Mail
     $body = "Здравствуйте.<br/>Ниже перечислены замечания Vitro-CAD и сроки их исполнения:<br/>" + $open + $odata + $closed + $cdata
-    #if(($null -ne $openissues) -and ($null -ne $closedissues))
     if(($null -eq $openissues) -and ($null -eq $closedissues))
     {
         Write-Host 'No issues for user' $to
@@ -131,6 +128,4 @@ foreach ($emp in $emps)
     {
         Send-Mail -To $to -body $body -From $from -Subject $subject -SMTPServer $smtpserver
     }
-    #Start-Sleep -Seconds 3
 }
-#Stop-Transcript
