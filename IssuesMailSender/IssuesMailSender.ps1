@@ -1,18 +1,18 @@
 ﻿#Объявляем переменные
-$Main = ""
-$Design = $Main + "/Design"
-$issuelistname = "Замечания"
-$orglistname = "Организационно-штатная структура"
-$fizlistname = "Физические лица"
-$empcontent = "0x010040D9D13AF3634AACB514CB30B54F2CAE004BC5116E5FCC734388387FAF0125CB7D"
+param (
+    [string]$url,
+    [string]$Design = $($url + "/Design"),
+    [string]$issuelistname = "Замечания",
+    [string]$orglistname = "Организационно-штатная структура",
+    [string]$fizlistname = "Физические лица",
+    [string]$empcontent = "0x010040D9D13AF3634AACB514CB30B54F2CAE004BC5116E5FCC734388387FAF0125CB7D",
+    [string]$dt = $(Get-Date -Format "dd/MM/yyyy"),
+    [string]$smtpserver,
+    [string]$from,
+    [string]$subject = "Сроки выполнения замечаний в Vitro-CAD [$($dt)]"
+)
 
-#данные для почтового сервиса
-$dt = Get-Date -Format "dd/MM/yyyy"
-$smtpserver = ""
-$from = ""
-$subject = "Сроки выполнения замечаний в Vitro-CAD [$dt]"
-
-$connectmain = Connect-PnPOnline $Main -CurrentCredentials
+$connectmain = Connect-PnPOnline $url -CurrentCredentials
 
 #собираем текущих пользователей ОШС
 $emps = Get-PnPListItem -List $orglistname | Where-Object {$_.FieldValues.ContentTypeId -like $empcontent -and $_.FieldValues.VitroOrgDisplayInStructure -eq $true}# -and $_.FieldValues.ID -in (160, 208, 209)}
@@ -29,7 +29,6 @@ $connectdesign = Connect-PnPOnline $Design -CurrentCredentials
 
 function Generate-Table()
 {
-
     param (
     [Parameter(Mandatory=$true,Position=0)]
     $issues
@@ -55,7 +54,7 @@ function Generate-Table()
             $duedate = if($null -ne $row.FieldValues.VitroBaseCommentDate){$row.FieldValues.VitroBaseCommentDate.ToString('d')}else{$row.FieldValues.VitroBaseCommentDate}
 
             $issuelink = "<a href='$Design/_layouts/15/Vitro/TableView/ListView.aspx?List=CommentList&listname=$issuelistname&ID=$issueId'>" + $row.FieldValues.ID + "</a>"
-            $filelink = "<a href='$Main/_layouts/15/Vitro/ProtocolHandler/VitroProtocolHandler.aspx?target=vitro://vitro/Design{$fileId}'>" + $row.FieldValues.VitroBaseLibraryItemName + "</a>"
+            $filelink = "<a href='$url/_layouts/15/Vitro/ProtocolHandler/VitroProtocolHandler.aspx?target=vitro://vitro/Design{$fileId}'>" + $row.FieldValues.VitroBaseLibraryItemName + "</a>"
         
             #Заполняем таблицу
             $HtmlTable += "<tr style='font-size:13px;background-color:#FFFFFF'>
@@ -122,7 +121,7 @@ foreach ($emp in $emps)
     $body = "Здравствуйте.<br/>Ниже перечислены замечания Vitro-CAD и сроки их исполнения:<br/>" + $open + $odata + $closed + $cdata
     if(($null -eq $openissues) -and ($null -eq $closedissues))
     {
-        Write-Host 'No issues for user' $to
+        Write-Host "Нет замечаний" $to
     }
     else
     {
