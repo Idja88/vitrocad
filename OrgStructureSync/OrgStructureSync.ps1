@@ -1,19 +1,41 @@
-﻿# Добавление Microsoft SharePoint Snap-in в текущую сессию
-If($null -eq (Get-PsSnapin | Where-Object {$_.Name -eq "Microsoft.SharePoint.PowerShell"})){
-    Write-Host -ForegroundColor White "Loading SharePoint Powershell Snapin"
+﻿param (
+    [Parameter(Mandatory=$true)]
+    [string]$url,
+    [string]$orglistname = "Организационно-штатная структура",
+    [string]$fizlistname = "Физические лица",
+    [string]$divcontent = "0x0100CE4B4034AA87410EB92561C8318E2C16005639E40A0D3F6342A19FF44EB45B5A85",
+    [string]$empcontent = "0x010040D9D13AF3634AACB514CB30B54F2CAE004BC5116E5FCC734388387FAF0125CB7D"
+)
+
+function Test-ModuleInstalled {
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]$ModuleName
+    )
+    return $null -ne (Get-Module -ListAvailable -Name $ModuleName)
+}
+
+function Add-LoginProperties {
+    param (
+        $Item,
+        $ListItems
+    )
+    $LoginName = ($ListItems | Where-Object {$_.FieldValues.ID -eq $Item.FieldValues.VitroOrgPerson.LookupId}).FieldValues.VitroOrgLogin.LookupValue
+    $LoginId = ($ListItems | Where-Object {$_.FieldValues.ID -eq $Item.FieldValues.VitroOrgPerson.LookupId}).FieldValues.VitroOrgLogin.LookupId
+
+    $Item.FieldValues | Add-Member -MemberType NoteProperty -Name PersonLogin -Value $LoginName -Force
+    $Item.FieldValues | Add-Member -MemberType NoteProperty -Name PersonLoginId -Value $LoginId -Force
+}
+
+# Добавление Microsoft SharePoint Snap-in в текущую сессию
+if (-not (Test-ModuleInstalled -ModuleName "Microsoft.SharePoint.PowerShell")) {
+    Write-Output "Loading SharePoint PowerShell Snapin"
     Add-PsSnapin Microsoft.SharePoint.PowerShell -ErrorAction Stop
 }
 
-#Объявлем переменные
-$url = ""
-$orglistname = "Организационно-штатная структура"
-$fizlistname = "Физические лица"
-$divcontent = "0x0100CE4B4034AA87410EB92561C8318E2C16005639E40A0D3F6342A19FF44EB45B5A85"
-$empcontent = "0x010040D9D13AF3634AACB514CB30B54F2CAE004BC5116E5FCC734388387FAF0125CB7D"
-$ProcessError = @()
+Connect-PnPOnline $url -Credentials -CurrentCredentials
 
-$admin = Get-PnpStoredCredential -Name $url -Type PSCredential
-Connect-PnPOnline $url -Credentials $admin
+$ProcessError = @()
 
 #Синхронизируем учётные записи из AD
 $users = (Get-SPUser -Web $url).Id
@@ -23,8 +45,10 @@ foreach($user in $users){
 }
 
 #Собираем объекты Подразделений и Сотрудников
-$emps = Get-PnPListItem -List $orglistname | Where-Object {$_.FieldValues.ContentTypeId -like $empcontent -and $_.FieldValues.VitroOrgDisplayInStructure -eq $true}
-$divs = Get-PnPListItem -List $orglistname | Where-Object {$_.FieldValues.ContentTypeId -like $divcontent -and $_.FieldValues.VitroOrgDisplayInStructure -eq $true} | Select -Skip 1 #Убираем из массива корень структуры
+$orgitems = Get-PnPListItem -List $orglistname
+$fizitems = Get-PnPListItem -List $fizlistname
+$emps = $orgitems | Where-Object {$_.FieldValues.ContentTypeId -like $empcontent -and $_.FieldValues.VitroOrgDisplayInStructure -eq $true}
+$divs = $orgitems | Where-Object {$_.FieldValues.ContentTypeId -like $divcontent -and $_.FieldValues.VitroOrgDisplayInStructure -eq $true} | Select-Object -Skip 1 #Убираем из массива корень структуры
 
 foreach ($div in $divs) {
         
@@ -61,14 +85,28 @@ foreach ($div in $divs) {
         Write-Host "К подразделению" $div.FieldValues.Title "добавлена аналогичная группа пользователей."-ForegroundColor Yellow
         }
     }
+
+    #Проверка на соответствие Сотрудников в Группе Пользователей и удаление лишних (перевод сотрудника в др. отдел)
+    $emparr = Get-PnPListItem -List $orglistname | Where-Object {$_.FieldValues.ContentTypeId -like $empcontent -and $_.FieldValues.VitroOrgDisplayInStructure -eq $true -and $_.FieldValues.VitroOrgParentId.LookupValue -eq $div.FieldValues.Title}
+
+    foreach ($i in $emparr){
+        Add-LoginProperties -Item $i -ListItems $fizitems
+    }
+    
+    $grparr = Get-PnPGroupMembers -Identity $div.FieldValues.GroupId | 
+        ForEach-Object {
+            if($_.Id -in $emparr.FieldValues.PersonLoginId) { 
+                Write-Host "Сотрудник" $_.Title "принадлежит данному подразделению." -ForeGroundColor Green} 
+            else {
+                #Убираем логин пользователя, который больше не является сотрудником подразделения
+                Write-Host "Сотрудник" $_.Title "больше не принадлежит данному подразделению, и будет удалён из группы." -ForegroundColor Yellow
+                $Rmvusr = Remove-PnPUserFromGroup -LoginName $_.LoginName -Identity $div.FieldValues.GroupId
+            }
+            }
 }
 
 foreach ($emp in $emps){
-    $LoginName = (Get-PnPListItem -List $fizlistname | Where-Object {$_.FieldValues.ID -eq $emp.FieldValues.VitroOrgPerson.LookupId}).FieldValues.VitroOrgLogin.LookupValue
-    $LoginId = (Get-PnPListItem -List $fizlistname | Where-Object {$_.FieldValues.ID -eq $emp.FieldValues.VitroOrgPerson.LookupId}).FieldValues.VitroOrgLogin.LookupId
-
-    $emp.FieldValues | Add-Member -MemberType NoteProperty -Name PersonLogin -Value $LoginName -Force
-    $emp.FieldValues | Add-Member -MemberType NoteProperty -Name PersonLoginId -Value $LoginId -Force
+    Add-LoginProperties -Item $emp -ListItems $fizitems
 
     if(Get-PnPGroupMembers -Identity $emp.FieldValues.VitroOrgParentId.LookupValue | Where-Object {$_.Id -eq $emp.FieldValues.PersonLoginId}){
     Write-Host "Пользователь - " $emp.FieldValues.Title "уже находится в группе." -ForegroundColor Green
@@ -82,31 +120,6 @@ foreach ($emp in $emps){
     Write-Host "Пользователь - " $emp.FieldValues.Title "добавлен в группу." -ForegroundColor Yellow
     }
   }
-}
-
-#Проверка на соответствие Сотрудников в Группе Пользователей и удаление лишних (перевод сотрудника в др. отдел)
-foreach ($div in $divs){
-
-$emparr = Get-PnPListItem -List $orglistname | Where-Object {$_.FieldValues.ContentTypeId -like $empcontent -and $_.FieldValues.VitroOrgDisplayInStructure -eq $true -and $_.FieldValues.VitroOrgParentId.LookupValue -eq $div.FieldValues.Title}
-
-foreach ($i in $emparr){
-    $EmpLoginName = (Get-PnPListItem -List $fizlistname | Where-Object {$_.FieldValues.ID -eq $i.FieldValues.VitroOrgPerson.LookupId}).FieldValues.VitroOrgLogin.LookupValue
-    $EmpLoginId = (Get-PnPListItem -List $fizlistname | Where-Object {$_.FieldValues.ID -eq $i.FieldValues.VitroOrgPerson.LookupId}).FieldValues.VitroOrgLogin.LookupId
-
-    $i.FieldValues | Add-Member -MemberType NoteProperty -Name PersonLogin -Value $EmpLoginName -Force
-    $i.FieldValues | Add-Member -MemberType NoteProperty -Name PersonLoginId -Value $EmpLoginId -Force
-}
-
-$grparr = Get-PnPGroupMembers -Identity $div.FieldValues.GroupId | 
-    ForEach-Object {
-        if($_.Id -in $emparr.FieldValues.PersonLoginId) { 
-            Write-Host "Сотрудник" $_.Title "принадлежит данному подразделению." -ForeGroundColor Green} 
-        else {
-            #Убираем логин пользователя, который больше не является сотрудником подразделения
-            Write-Host "Сотрудник" $_.Title "больше не принадлежит данному подразделению, и будет удалён из группы." -ForegroundColor Yellow
-            $Rmvusr = Remove-PnPUserFromGroup -LoginName $_.LoginName -Identity $div.FieldValues.GroupId
-        }
-        }
 }
 
 $ProcessError.Count
