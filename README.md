@@ -22,7 +22,7 @@ VitroCAD - это система управления инженерными д�
 
 - PowerShell 5.1 или выше
 - Microsoft.SharePoint.PowerShell модуль: `Add-PSSnapin Microsoft.SharePoint.PowerShell`
-- PnP PowerShell модуль: `Install-Module SharePointPnPPowerShellOnline`
+- PnP PowerShell модуль: `Install-Module -Name SharePointPnPPowerShell2013`
 
 ## Использование
 
