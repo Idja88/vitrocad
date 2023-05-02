@@ -1,6 +1,8 @@
 #Переменные
-$SiteURL = ""
-$ListName="Проекты"
+param (
+    [string]$SiteURL,
+    [string]$ListName="Проекты"
+)
 $date = Get-Date
 
 #Подключение к вебсайту под sp_setup
