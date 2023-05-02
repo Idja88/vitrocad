@@ -1,12 +1,12 @@
 #Переменные
 param (
-    [string]$SiteURL,
+    [string]$url,
     [string]$ListName="Проекты"
 )
 $date = Get-Date
 
 #Подключение к вебсайту под sp_setup
-Connect-PnPOnline -Url $SiteURL -CurrentCredentials
+Connect-PnPOnline -Url $url -CurrentCredentials
 
 #Задача запускается раз в 15 минут, поэтому находим все папки созданные за 20 минут до запуска
 $query = "<View Scope='RecursiveAll'>

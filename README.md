@@ -16,6 +16,7 @@ VitroCAD - это система управления инженерными д�
 2. **OrgStructureVacation**
 3. **IssuesMailSender**
 4. **AddUniqueRoles**
+5. **ImportFromCsv**
 
 ## Требования
 
