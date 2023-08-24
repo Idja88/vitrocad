@@ -12,21 +12,6 @@ param (
     [string]$subject = "Сроки выполнения замечаний в Vitro-CAD [$($dt)]"
 )
 
-$connectmain = Connect-PnPOnline $url -CurrentCredentials
-
-#собираем текущих пользователей ОШС
-$emps = Get-PnPListItem -List $orglistname | Where-Object {$_.FieldValues.ContentTypeId -like $empcontent -and $_.FieldValues.VitroOrgDisplayInStructure -eq $true}# -and $_.FieldValues.ID -in (160, 208, 209)}
-
-#Собираем почтовые адреса из списка физ. лиц
-foreach ($emp in $emps){
-
-    $PersonEmail = (Get-PnPListItem -List $fizlistname | Where-Object {$_.FieldValues.ID -eq $emp.FieldValues.VitroOrgPerson.LookupId}).FieldValues.Email
-
-    $emp.FieldValues | Add-Member -MemberType NoteProperty -Name Mail -Value $PersonEmail -Force
-}
-
-$connectdesign = Connect-PnPOnline $Design -CurrentCredentials
-
 function Generate-Table()
 {
     param (
@@ -98,6 +83,21 @@ Function Send-Mail
     } Until ($Exit -eq 4)
 }
 
+Connect-PnPOnline $url -CurrentCredentials
+
+#собираем текущих пользователей ОШС
+$emps = Get-PnPListItem -List $orglistname | Where-Object {$_.FieldValues.ContentTypeId -like $empcontent -and $_.FieldValues.VitroOrgDisplayInStructure -eq $true}# -and $_.FieldValues.ID -in (160, 208, 209)}
+
+#Собираем почтовые адреса из списка физ. лиц
+foreach ($emp in $emps){
+
+    $PersonEmail = (Get-PnPListItem -List $fizlistname | Where-Object {$_.FieldValues.ID -eq $emp.FieldValues.VitroOrgPerson.LookupId}).FieldValues.Email
+
+    $emp.FieldValues | Add-Member -MemberType NoteProperty -Name Mail -Value $PersonEmail -Force
+}
+
+Connect-PnPOnline $Design -CurrentCredentials
+
 foreach ($emp in $emps)
 {
     #Заголовки тела письма
@@ -119,11 +119,7 @@ foreach ($emp in $emps)
     #Отправка почты
     $to = $emp.FieldValues.Mail
     $body = "Здравствуйте.<br/>Ниже перечислены замечания Vitro-CAD и сроки их исполнения:<br/>" + $open + $odata + $closed + $cdata
-    if(($null -eq $openissues) -and ($null -eq $closedissues))
-    {
-        Write-Host "Нет замечаний" $to
-    }
-    else
+    if(($null -ne $openissues) -and ($null -ne $closedissues))
     {
         Send-Mail -To $to -body $body -From $from -Subject $subject -SMTPServer $smtpserver
     }
