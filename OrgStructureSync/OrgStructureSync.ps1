@@ -51,20 +51,19 @@ $emps = $orgitems | Where-Object {$_.FieldValues.ContentTypeId -like $empcontent
 $divs = $orgitems | Where-Object {$_.FieldValues.ContentTypeId -like $divcontent -and $_.FieldValues.VitroOrgDisplayInStructure -eq $true} | Select-Object -Skip 1 #Убираем из массива корень структуры
 
 foreach ($div in $divs) {
-        
     #Проверка на существующие группы, как подразделения
-    if($null -ne (Get-PnPGroup -Identity $div.FieldValues.Title)){
+    if($null -ne (Get-PnPGroup -Identity $div.FieldValues.Title)) {
         Write-Host "Подразделение - " $div.FieldValues.Title "уже добавлено как группа пользователей." -ForegroundColor Green
-        }
-    else{
-       $NewGrp = New-PnPGroup -Title $div.FieldValues.Title -Owner $admin.UserName -ErrorAction SilentlyContinue -ErrorVariable ProcessError
-       if($ProcessError) {
+    }
+    else {
+        $NewGrp = New-PnPGroup -Title $div.FieldValues.Title -Owner $admin.UserName -ErrorAction SilentlyContinue -ErrorVariable ProcessError
+        if($ProcessError) {
         Write-Host "Ошибка с подразделением" $div.FieldValues.Title -ForegroundColor Red
         }
-        else{
+        else {
         Write-Host "Подразделение - " $div.FieldValues.Title "добавлено как группа пользователей." -ForegroundColor Yellow
-       }
-}
+        }
+    }
     #Забираем ID групп пользователей
     $divGrp = (Get-PnPGroup -Identity $div.FieldValues.Title).Id
     $div.FieldValues | Add-Member -MemberType NoteProperty -Name GroupId -Value $divGrp -Force
@@ -74,20 +73,20 @@ foreach ($div in $divs) {
 
     #Проверка на уже проставленные группы
     if((Get-PnPListItem -List $orglistname -Id $div.Id).FieldValues.VitroOrgLogin.LookupId -eq $div.FieldValues.GroupID){
-    Write-Host "У подразделения" $div.FieldValues.Title "уже проставлена аналогичная группа пользователей." -ForegroundColor Green
+        Write-Host "У подразделения" $div.FieldValues.Title "уже проставлена аналогичная группа пользователей." -ForegroundColor Green
     }
     else{
-    $SetGrp = Set-PnPListItem -List $orglistname -ContentType "Подразделение" -Identity $div.Id -Values $GroupValues -ErrorAction SilentlyContinue -ErrorVariable ProcessError
-    if($ProcessError) {
-        Write-Host "Ошибка с подразделением" $div.FieldValues.Title -ForegroundColor Red
+        $SetGrp = Set-PnPListItem -List $orglistname -ContentType "Подразделение" -Identity $div.Id -Values $GroupValues -ErrorAction SilentlyContinue -ErrorVariable ProcessError
+        if($ProcessError) {
+            Write-Host "Ошибка с подразделением" $div.FieldValues.Title -ForegroundColor Red
         }
         else {
-        Write-Host "К подразделению" $div.FieldValues.Title "добавлена аналогичная группа пользователей."-ForegroundColor Yellow
+            Write-Host "К подразделению" $div.FieldValues.Title "добавлена аналогичная группа пользователей."-ForegroundColor Yellow
         }
     }
 
     #Проверка на соответствие Сотрудников в Группе Пользователей и удаление лишних (перевод сотрудника в др. отдел)
-    $emparr = Get-PnPListItem -List $orglistname | Where-Object {$_.FieldValues.ContentTypeId -like $empcontent -and $_.FieldValues.VitroOrgDisplayInStructure -eq $true -and $_.FieldValues.VitroOrgParentId.LookupValue -eq $div.FieldValues.Title}
+    $emparr = $emps | Where-Object {$_.FieldValues.VitroOrgParentId.LookupId -eq $div.FieldValues.ID}
 
     foreach ($i in $emparr){
         Add-LoginProperties -Item $i -ListItems $fizitems
