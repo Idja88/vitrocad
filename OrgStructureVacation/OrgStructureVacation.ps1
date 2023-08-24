@@ -19,7 +19,6 @@ function Reset-SubstituteAndVacationInfo($listName, $itemId) {
 
 Connect-PnPOnline -Url $url -CurrentCredentials
 $dt = Get-Date
-
 $emps = Get-PnPListItem -List $orglistname | Where-Object {$_.FieldValues.ContentTypeId -like $empcontent -and $_.FieldValues.VitroOrgDisplayInStructure -eq $true -and $_.FieldValues.VitroOrgSubstituteDelayed -ne $null}
 
 foreach($i in $emps){

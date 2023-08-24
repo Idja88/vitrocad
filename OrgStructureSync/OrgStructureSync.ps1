@@ -29,96 +29,61 @@ function Add-LoginProperties {
 
 # Добавление MicrosoftSharePointPowershell Module в текущую сессию
 if (-not (Test-ModuleInstalled -ModuleName "Microsoft.SharePoint.PowerShell")) {
-    Write-Output "Loading SharePoint PowerShell Snapin"
     Add-PsSnapin Microsoft.SharePoint.PowerShell -ErrorAction Stop
 }
 
-Connect-PnPOnline $url -Credentials -CurrentCredentials
-
-$ProcessError = @()
-
-#Синхронизируем учётные записи из AD
-$users = (Get-SPUser -Web $url).Id
-
-foreach($user in $users){
-    Set-SPUser -Web $url -Identity $user -SyncFromAD
-}
+$admin = Get-PnpStoredCredential -Name $url -Type PSCredential
+Connect-PnPOnline $url -Credentials $admin
 
 #Собираем объекты Подразделений и Сотрудников
+$users = (Get-SPUser -Web $url).Id
 $orgitems = Get-PnPListItem -List $orglistname
 $fizitems = Get-PnPListItem -List $fizlistname
 $emps = $orgitems | Where-Object {$_.FieldValues.ContentTypeId -like $empcontent -and $_.FieldValues.VitroOrgDisplayInStructure -eq $true}
 $divs = $orgitems | Where-Object {$_.FieldValues.ContentTypeId -like $divcontent -and $_.FieldValues.VitroOrgDisplayInStructure -eq $true} | Select-Object -Skip 1 #Убираем из массива корень структуры
 
+#Синхронизируем данные учётных записей из AD
+foreach($user in $users){
+    Set-SPUser -Web $url -Identity $user -SyncFromAD
+}
+
 foreach ($div in $divs) {
-    #Проверка на существующие группы, как подразделения
-    if($null -ne (Get-PnPGroup -Identity $div.FieldValues.Title)) {
-        Write-Host "Подразделение - " $div.FieldValues.Title "уже добавлено как группа пользователей." -ForegroundColor Green
+    #Проверка на существующие группы, как подразделения и добавление их как параметр
+    $divGrp = Get-PnPGroup -Identity $div.FieldValues.Title
+    if($null -eq $divGrp) {
+        $divGrpNew = New-PnPGroup -Title $div.FieldValues.Title -Owner $admin.UserName
+        $div.FieldValues | Add-Member -MemberType NoteProperty -Name GroupId -Value $divGrpNew.Id -Force
+        [string]$strGrp = $div.FieldValues.GroupId
+        $GroupValues = @{"VitroOrgLogin" = $strGrp}
     }
     else {
-        $NewGrp = New-PnPGroup -Title $div.FieldValues.Title -Owner $admin.UserName -ErrorAction SilentlyContinue -ErrorVariable ProcessError
-        if($ProcessError) {
-        Write-Host "Ошибка с подразделением" $div.FieldValues.Title -ForegroundColor Red
-        }
-        else {
-        Write-Host "Подразделение - " $div.FieldValues.Title "добавлено как группа пользователей." -ForegroundColor Yellow
-        }
+        $div.FieldValues | Add-Member -MemberType NoteProperty -Name GroupId -Value $divGrp.Id -Force
+        [string]$strGrp = $div.FieldValues.GroupId
+        $GroupValues = @{"VitroOrgLogin" = $strGrp}
     }
-    #Забираем ID групп пользователей
-    $divGrp = (Get-PnPGroup -Identity $div.FieldValues.Title).Id
-    $div.FieldValues | Add-Member -MemberType NoteProperty -Name GroupId -Value $divGrp -Force
-
-    [string]$strGrp = $div.FieldValues.GroupId
-    $GroupValues =@{"VitroOrgLogin" = $strGrp}
 
     #Проверка на уже проставленные группы
-    if((Get-PnPListItem -List $orglistname -Id $div.Id).FieldValues.VitroOrgLogin.LookupId -eq $div.FieldValues.GroupID){
-        Write-Host "У подразделения" $div.FieldValues.Title "уже проставлена аналогичная группа пользователей." -ForegroundColor Green
-    }
-    else{
-        $SetGrp = Set-PnPListItem -List $orglistname -ContentType "Подразделение" -Identity $div.Id -Values $GroupValues -ErrorAction SilentlyContinue -ErrorVariable ProcessError
-        if($ProcessError) {
-            Write-Host "Ошибка с подразделением" $div.FieldValues.Title -ForegroundColor Red
-        }
-        else {
-            Write-Host "К подразделению" $div.FieldValues.Title "добавлена аналогичная группа пользователей."-ForegroundColor Yellow
-        }
+    if($div.FieldValues.VitroOrgLogin.LookupId -ne $div.FieldValues.GroupID -or $null -eq $div.FieldValues.VitroOrgLogin.LookupId){
+        Set-PnPListItem -List $orglistname -ContentType "Подразделение" -Identity $div.Id -Values $GroupValues
     }
 
     #Проверка на соответствие Сотрудников в Группе Пользователей и удаление лишних (перевод сотрудника в др. отдел)
-    $emparr = $emps | Where-Object {$_.FieldValues.VitroOrgParentId.LookupId -eq $div.FieldValues.ID}
+    $divemps = $emps | Where-Object {$_.FieldValues.VitroOrgParentId.LookupId -eq $div.FieldValues.ID}
+    $grpmbrs = Get-PnPGroupMembers -Identity $div.FieldValues.GroupId
 
-    foreach ($i in $emparr){
-        Add-LoginProperties -Item $i -ListItems $fizitems
+    #Добавляем сотрудника в группу пользователей
+    foreach ($divemp in $divemps){
+        Add-LoginProperties -Item $divemp -ListItems $fizitems
+
+        if($divemp.FieldValues.PersonLogin -notin $grpmbrs.ID){
+            Add-PnPUserToGroup -Identity $divemp.FieldValues.VitroOrgParentId.LookupValue -LoginName $divemp.FieldValues.PersonLogin
+        }
     }
-    
-    $grparr = Get-PnPGroupMembers -Identity $div.FieldValues.GroupId | 
-        ForEach-Object {
-            if($_.Id -in $emparr.FieldValues.PersonLoginId) { 
-                Write-Host "Сотрудник" $_.Title "принадлежит данному подразделению." -ForeGroundColor Green} 
-            else {
-                #Убираем логин пользователя, который больше не является сотрудником подразделения
-                Write-Host "Сотрудник" $_.Title "больше не принадлежит данному подразделению, и будет удалён из группы." -ForegroundColor Yellow
-                $Rmvusr = Remove-PnPUserFromGroup -LoginName $_.LoginName -Identity $div.FieldValues.GroupId
-            }
-            }
+
+    #Убираем логин пользователя, который больше не является сотрудником подразделения
+    foreach($grpmbr in $grpmbrs){
+        if($grpmbr.Id -notin $divemps.FieldValues.PersonLoginId){
+            Remove-PnPUserFromGroup -LoginName $_.LoginName -Identity $div.FieldValues.GroupId
+        }
+    }
 }
-
-foreach ($emp in $emps){
-    Add-LoginProperties -Item $emp -ListItems $fizitems
-
-    if(Get-PnPGroupMembers -Identity $emp.FieldValues.VitroOrgParentId.LookupValue | Where-Object {$_.Id -eq $emp.FieldValues.PersonLoginId}){
-    Write-Host "Пользователь - " $emp.FieldValues.Title "уже находится в группе." -ForegroundColor Green
-    }
-    else {
-    $UserToGrp = Add-PnPUserToGroup -Identity $emp.FieldValues.VitroOrgParentId.LookupValue -LoginName $emp.FieldValues.PersonLogin -ErrorAction SilentlyContinue -ErrorVariable ProcessError
-    if($ProcessError) {
-    Write-Host "Невозможно найти группу" -ForegroundColor Red
-    }
-    else {
-    Write-Host "Пользователь - " $emp.FieldValues.Title "добавлен в группу." -ForegroundColor Yellow
-    }
-  }
-}
-
-$ProcessError.Count

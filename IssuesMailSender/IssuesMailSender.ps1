@@ -12,7 +12,7 @@ param (
     [string]$subject = "Сроки выполнения замечаний в Vitro-CAD [$($dt)]"
 )
 
-function Generate-Table()
+function Add-Table()
 {
     param (
     [Parameter(Mandatory=$true,Position=0)]
@@ -86,7 +86,7 @@ Function Send-Mail
 Connect-PnPOnline $url -CurrentCredentials
 
 #собираем текущих пользователей ОШС
-$emps = Get-PnPListItem -List $orglistname | Where-Object {$_.FieldValues.ContentTypeId -like $empcontent -and $_.FieldValues.VitroOrgDisplayInStructure -eq $true}# -and $_.FieldValues.ID -in (160, 208, 209)}
+$emps = Get-PnPListItem -List $orglistname | Where-Object {$_.FieldValues.ContentTypeId -like $empcontent -and $_.FieldValues.VitroOrgDisplayInStructure -eq $true}
 
 #Собираем почтовые адреса из списка физ. лиц
 foreach ($emp in $emps){
@@ -111,10 +111,10 @@ foreach ($emp in $emps)
     $closedissues = Get-PnPListItem -List $issuelistname | Where-Object {$_.FieldValues.VitroBaseCommentStatus.LookupId -eq 3 -and $_.FieldValues.VitroBaseCommentAuthor.LookupId -eq $emp.FieldValues.ID} | Sort-Object -Property {$_.FieldValues.VitroBaseCommentProject}
 
     #Открытые поручения
-    if($null -ne $openissues){$odata = Generate-Table $openissues}else{$odata='';$open = ''}
+    if($null -ne $openissues){$odata = Add-Table $openissues}else{$odata='';$open = ''}
 
     #Закрытые поручения
-    if($null -ne $closedissues){$cdata = Generate-Table $closedissues}else{$cdata='';$closed = ''}
+    if($null -ne $closedissues){$cdata = Add-Table $closedissues}else{$cdata='';$closed = ''}
 
     #Отправка почты
     $to = $emp.FieldValues.Mail
