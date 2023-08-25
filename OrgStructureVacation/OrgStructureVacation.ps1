@@ -17,7 +17,8 @@ function Reset-SubstituteAndVacationInfo($listName, $itemId) {
     Set-PnPListItem -List $listName -Identity $itemId -Values @{"VitroOrgSubstitute" = $null; "VitroOrgSubstituteDelayed" = $null; "VitroOrgVacationStartDate" = $null; "VitroOrgVacationDueDate" = $null}
 }
 
-Connect-PnPOnline -Url $url -CurrentCredentials
+$admin = Get-PnpStoredCredential -Name $url -Type PSCredential
+Connect-PnPOnline -Url $url -Credentials $admin
 $dt = Get-Date
 $emps = Get-PnPListItem -List $orglistname | Where-Object {$_.FieldValues.ContentTypeId -like $empcontent -and $_.FieldValues.VitroOrgDisplayInStructure -eq $true -and $_.FieldValues.VitroOrgSubstituteDelayed -ne $null}
 
