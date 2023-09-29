@@ -37,7 +37,7 @@ $admin = Get-PnpStoredCredential -Name $url -Type PSCredential
 Connect-PnPOnline $url -Credentials $admin
 
 #Собираем объекты Подразделений и Сотрудников
-$users = (Get-SPUser -Web $url).Id
+$users = Get-SPUser -Web $url
 $orgitems = Get-PnPListItem -List $orglistname
 $fizitems = Get-PnPListItem -List $fizlistname
 $emps = $orgitems | Where-Object {$_.FieldValues.ContentTypeId -like $empcontent -and $_.FieldValues.VitroOrgDisplayInStructure -eq $true}
@@ -46,7 +46,7 @@ $funcs = $orgitems | Where-Object {$_.FieldValues.ContentTypeId -like $funcconte
 
 #Синхронизируем данные учётных записей из AD
 foreach($user in $users){
-    Set-SPUser -Web $url -Identity $user -SyncFromAD
+    Set-SPUser -Web $url -Identity $user.ID -SyncFromAD
 }
 
 foreach ($div in $divs) {
@@ -76,7 +76,7 @@ foreach ($div in $divs) {
     #Добавляем сотрудника в группу пользователей
     foreach ($divemp in $divemps){
         Add-LoginProperties -Item $divemp -ListItems $fizitems
-        if($divemp.FieldValues.PersonLogin -notin $grpmbrs.ID){
+        if($divemp.FieldValues.PersonLoginId -notin $grpmbrs.ID){
             Add-PnPUserToGroup -Identity $div.FieldValues.GroupId -LoginName $divemp.FieldValues.PersonLogin
         }
     }
@@ -116,7 +116,7 @@ foreach ($func in $funcs) {
     #Добавляем сотрудника в группу пользователей
     foreach ($funcemp in $funcemps){
         Add-LoginProperties -Item $funcemp -ListItems $fizitems
-        if($funcemp.FieldValues.PersonLogin -notin $funcgrpmbrs.ID){
+        if($funcemp.FieldValues.PersonLoginId -notin $funcgrpmbrs.ID){
             Add-PnPUserToGroup -Identity $func.FieldValues.GroupId -LoginName $funcemp.FieldValues.PersonLogin
         }
     }
