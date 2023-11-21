@@ -43,11 +43,34 @@ $fizitems = Get-PnPListItem -List $fizlistname
 $emps = $orgitems | Where-Object {$_.FieldValues.ContentTypeId -like $empcontent -and $_.FieldValues.VitroOrgDisplayInStructure -eq $true}
 $divs = $orgitems | Where-Object {$_.FieldValues.ContentTypeId -like $divcontent -and $_.FieldValues.VitroOrgDisplayInStructure -eq $true} | Select-Object -Skip 1 #Убираем из массива корень структуры
 $funcs = $orgitems | Where-Object {$_.FieldValues.ContentTypeId -like $funccontent -and $_.FieldValues.VitroOrgDisplayInStructure -eq $true}
+#Собираем список физ лиц без заполненной эл почты, при необходимости синхронизации данных из AD
+#$pers = $fizitems | Where-Object {$null -ne $_.FieldValues.VitroOrgLogin}
 
 #Синхронизируем данные учётных записей из AD
 foreach($user in $users){
     Set-SPUser -Web $url -Identity $user.ID -SyncFromAD
 }
+
+#Обновляем поля Телефон и Эл.Почта, при необходимости синхронизации данных из AD
+<#
+foreach ($per in $pers){
+    $identity = $users | Where-Object {$_.ID -eq $per.FieldValues.VitroOrgLogin.LookupId}
+  
+    $aduser = Get-ADUser -Identity $identity.UserId.NameId -Properties "mail","telephoneNumber"
+    
+    if($null -ne $aduser.mail){
+      if($null -eq $per.FieldValues.Email -or $aduser.mail -ne $per.FieldValues.Email){
+      Set-PnPListItem -List $fizlistname -Identity $per.FieldValues.ID -Values @{"Email" = $aduser.mail}
+      }
+    }
+    
+    if($null -ne $aduser.telephoneNumber){
+      if($null -eq $per.FieldValues.VitroOrgPhone -or $aduser.telephoneNumber -ne $per.FieldValues.VitroOrgPhone){
+      Set-PnPListItem -List $fizlistname -Identity $per.FieldValues.ID -Values @{"VitroOrgPhone" = $aduser.telephoneNumber}
+      }
+    }
+  }
+#>
 
 foreach ($div in $divs) {
     #Проверка на существующие группы, как подразделения и добавление их как параметр
