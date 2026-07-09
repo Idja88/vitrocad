@@ -15,7 +15,7 @@ $Ctx= Get-PnPContext
 $global:counter=0
 $ListItems = Get-PnPListItem -List $ListName -Fields FileLeafRef -PageSize 2000 -ScriptBlock { Param($items) $global:counter += $items.Count; Write-Progress `
                 -PercentComplete ($global:Counter / ($List.ItemCount) * 100) -Activity "Getting Files of '$($List.Title)'" `
-                    -Status "Processing Files $global:Counter of $($List.ItemCount)";} | Where {($_.FileSystemObjectType -eq "File")}
+                    -Status "Processing Files $global:Counter of $($List.ItemCount)";} | Where-Object {($_.FileSystemObjectType -eq "File")}
 Write-Progress -Activity "Completed Retrieving Files!" -Completed
  
 $TotalFiles = $ListItems.count
