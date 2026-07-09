@@ -34,7 +34,7 @@ Function Send-Mail
     } Until ($Exit -eq 4)
 }
 #main data
-$connectmain = Connect-PnPOnline $url -CurrentCredentials
+Connect-PnPOnline $url -CurrentCredentials
 
 #collect contracts
 $dt = Get-Date
